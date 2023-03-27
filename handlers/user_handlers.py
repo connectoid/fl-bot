@@ -2,6 +2,8 @@ from time import sleep
 from aiogram import Router, Bot
 from aiogram.filters import Command, CommandStart, Text
 from aiogram.types import CallbackQuery, Message
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 
 from services.vacancies import update_vacancies, check_category_link, request_new_vacansies
 from services.parser import get_details
@@ -10,16 +12,23 @@ from database.orm import (add_vacancy_to_favorite, get_new_vacancies,
                           get_favorite_vacancies, remove_vacancy_from_favorite,
                           get_vavancy_link, add_user, get_user_id, add_category_link,
                           get_user_categories_list, clear_user_categories_list,
-                          check_categories, enable_auto, disable_auto, is_auto_enabled)
+                          check_categories)
 from lexicon.lexicon_ru import LEXICON_HELP, NO_ADDED_LINKS, NO_NEW_VACANCIES
 
+REQUEST_INTERVAL = 60
+
 router: Router = Router()
+scheduler = AsyncIOScheduler()
 
 
 @router.message(CommandStart())
 async def process_start_command(message: Message):
     add_user(message.from_user.id)
     await message.answer(text='Вы запустили бот fl-bot')
+    if not check_categories(message.from_user.id):
+        await message.answer(text=NO_ADDED_LINKS)
+    scheduler.add_job(process_request_new_vacancies_silent, 'interval', seconds=REQUEST_INTERVAL, args=(message,))
+    scheduler.start()
 
 
 @router.message(Command(commands='help'))
@@ -34,7 +43,7 @@ async def process_get_vacancies_command(message: Message):
 
 
 @router.message(Command(commands='request'))
-async def process_post_new_vacancies_command(message: Message):
+async def process_request_new_vacancies_command(message: Message):
     user_id = get_user_id(message.from_user.id)
     result = request_new_vacansies(user_id)
     if isinstance(result, dict):
@@ -45,6 +54,17 @@ async def process_post_new_vacancies_command(message: Message):
                         parse_mode='HTML')
     else:
         await message.answer(text=result)
+
+
+async def process_request_new_vacancies_silent(message: Message):
+    user_id = get_user_id(message.from_user.id)
+    result = request_new_vacansies(user_id)
+    if isinstance(result, dict):
+        for id, text in result.items():
+            await message.answer(text=text, reply_markup=create_bottom_keyboard(
+                        id,
+                        'Подробно', '⭐️ В избранное'),
+                        parse_mode='HTML')
 
 
 @router.message(Command(commands='favorite'))
@@ -129,34 +149,6 @@ async def process_add_category_link(message: Message):
             await message.answer(text='Категория добавлена')
     else:
         await message.answer(text='Неправильная ссылка (не соотвтетствует ссылке на RSS fl.ru)')
-
-
-@router.message(Command(commands='enable_auto'))
-async def set_auto_request(message: Message, bot: Bot):
-    user_id = get_user_id(message.from_user.id)
-    if check_categories(user_id):
-        enable_auto(user_id)
-        await message.answer(text='Включен автоматический опрос новых вакансий')
-    else:
-        await message.answer(text=NO_ADDED_LINKS)
-
-    #while is_auto_enabled(user_id):
-    #    result = request_new_vacansies(user_id)
-    #    if isinstance(result, dict):
-    #        for id, text in result.items():
-    #            await message.answer(text=text, reply_markup=create_bottom_keyboard(
-    #                    id,
-    #                    'Подробно', '⭐️ В избранное'),
-    #                    parse_mode='HTML')
-    #    sleep(30)
-
-
-
-@router.message(Command(commands='disable_auto'))
-async def set_off_auto_request(message: Message, bot: Bot):
-    user_id = get_user_id(message.from_user.id)
-    disable_auto(user_id)
-    await message.answer(text='Автоматический опрос новых вакансий выключен')
 
 
 @router.message(Command(commands='delmenu'))

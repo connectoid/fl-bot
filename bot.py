@@ -30,6 +30,7 @@ async def main():
     await dp.start_polling(bot)
 
     await set_main_menu(bot)
+    
 
 
 if __name__ == '__main__':

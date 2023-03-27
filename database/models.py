@@ -11,8 +11,6 @@ class User(Base):
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
     tg_id = Column(BigInteger, nullable=False)
-    is_scheduled = Column(Boolean, default = False)
-    request_timeout = Column(Integer, default = 30)
     orders = relationship('Vacancy', backref='vacancies', lazy=True)
     links = relationship('CategoryLink', backref='category_links', lazy=True)
 

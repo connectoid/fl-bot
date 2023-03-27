@@ -111,20 +111,6 @@ def check_categories(user_id):
     return False
 
 
-def enable_auto(user_id):
-    session = Session()
-    user = session.query(User).filter(User.id == user_id).first()
-    user.is_scheduled = True
-    session.commit()
-
-
-def disable_auto(user_id):
-    session = Session()
-    user = session.query(User).filter(User.id == user_id).first()
-    user.is_scheduled = False
-    session.commit()
-
-
 def is_auto_enabled(user_id):
     session = Session()
     user = session.query(User).filter(User.id == user_id).first()
