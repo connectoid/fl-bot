@@ -15,7 +15,7 @@ def get_data(url):
         response = session.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
     except Exception as error:
-        print('Возникла ошибка: ', error)
+        print('Возникла ошибка парсинга в get_data: ', error)
         soup = None
     return soup
 
@@ -26,6 +26,6 @@ def get_details(url):
         details = soup.find('div', {'class': 'text-5 b-layout__txt_padbot_20'}).text
         return details
     except Exception as error:
-        print('Возникла ошибка: ', error)
+        print('Возникла ошибка парсинга в get_details: ', error)
         return 'Не удалось получить подробное описание'
 

@@ -1,14 +1,17 @@
+from time import sleep
 from aiogram import Router, Bot
 from aiogram.filters import Command, CommandStart, Text
 from aiogram.types import CallbackQuery, Message
 
-from services.vacancies import update_vacancies
+from services.vacancies import update_vacancies, check_category_link, request_new_vacansies
 from services.parser import get_details
 from keyboards.bottom_post_kb import create_bottom_keyboard
 from database.orm import (add_vacancy_to_favorite, get_new_vacancies,
                           get_favorite_vacancies, remove_vacancy_from_favorite,
                           get_vavancy_link, add_user, get_user_id, add_category_link,
-                          get_user_categories_list)
+                          get_user_categories_list, clear_user_categories_list,
+                          check_categories, enable_auto, disable_auto, is_auto_enabled)
+from lexicon.lexicon_ru import LEXICON_HELP, NO_ADDED_LINKS, NO_NEW_VACANCIES
 
 router: Router = Router()
 
@@ -21,8 +24,7 @@ async def process_start_command(message: Message):
 
 @router.message(Command(commands='help'))
 async def process_help_command(message: Message):
-    await message.answer(text='Бот мониторит вакансии на fl.ru по заданным категориям'
-                         'и показывает новые с возможностью перейти по ссылке в вакансию')
+    await message.answer(text=LEXICON_HELP, disable_web_page_preview=True)
 
 
 @router.message(Command(commands='get'))
@@ -34,25 +36,15 @@ async def process_get_vacancies_command(message: Message):
 @router.message(Command(commands='request'))
 async def process_post_new_vacancies_command(message: Message):
     user_id = get_user_id(message.from_user.id)
-    categories = get_user_categories_list(user_id)
-    if categories:
-        update_vacancies(user_id, categories)
-        new_vacancies = get_new_vacancies()
-        if new_vacancies:
-            await message.answer(text='Список новых вакансий:')
-            for new_vacancy in new_vacancies:
-                text = (f'Вакансия № {new_vacancy.id} \n'
-                        f'<b>{new_vacancy.title}</b> \n'
-                        f'<i>{new_vacancy.description}</i> \n'
-                        f'{new_vacancy.link}')
-                await message.answer(text=text, reply_markup=create_bottom_keyboard(
-                        new_vacancy.id,
+    result = request_new_vacansies(user_id)
+    if isinstance(result, dict):
+        for id, text in result.items():
+            await message.answer(text=text, reply_markup=create_bottom_keyboard(
+                        id,
                         'Подробно', '⭐️ В избранное'),
                         parse_mode='HTML')
-        else:
-            await message.answer(text='Новых вакансий пока нет')
     else:
-        await message.answer(text='У вас не добавлено ни одно категории, для добавление используйте команду /addlink')
+        await message.answer(text=result)
 
 
 @router.message(Command(commands='favorite'))
@@ -105,18 +97,66 @@ async def process_details(callback: CallbackQuery):
     await callback.message.answer(text=text)
 
 
-@router.message(Command(commands='addlink'))
+@router.message(Command(commands='addcategory'))
 async def process_addlink_command(message: Message):
     await message.answer(text='Отправьте ссылку на категорию')
+
+
+@router.message(Command(commands='clearcategories'))
+async def process_clearlinks_command(message: Message):
+    user_id = get_user_id(message.from_user.id)
+    clear_user_categories_list(user_id)
+    await message.answer(text='Список категорий очищен')
+
+
+@router.message(Command(commands='showcategories'))
+async def process_showlinks_command(message: Message):
+    user_id = get_user_id(message.from_user.id)
+    categories = get_user_categories_list(user_id)
+    categories_list = []
+    for category in categories:
+        categories_list.append(str(category))
+    text = '\n'.join(categories_list)
+    await message.answer(text=text)
 
 
 @router.message(Text(startswith='https'))
 async def process_add_category_link(message: Message):
     user_id = get_user_id(message.from_user.id)
     link = message.text
-    print(f'===== Passing user_id:{user_id} and link:{link}')
-    if add_category_link(user_id, link):
-        await message.answer(text='Категория добавлена')
+    if check_category_link(link):
+        if add_category_link(user_id, link):
+            await message.answer(text='Категория добавлена')
+    else:
+        await message.answer(text='Неправильная ссылка (не соотвтетствует ссылке на RSS fl.ru)')
+
+
+@router.message(Command(commands='enable_auto'))
+async def set_auto_request(message: Message, bot: Bot):
+    user_id = get_user_id(message.from_user.id)
+    if check_categories(user_id):
+        enable_auto(user_id)
+        await message.answer(text='Включен автоматический опрос новых вакансий')
+    else:
+        await message.answer(text=NO_ADDED_LINKS)
+
+    #while is_auto_enabled(user_id):
+    #    result = request_new_vacansies(user_id)
+    #    if isinstance(result, dict):
+    #        for id, text in result.items():
+    #            await message.answer(text=text, reply_markup=create_bottom_keyboard(
+    #                    id,
+    #                    'Подробно', '⭐️ В избранное'),
+    #                    parse_mode='HTML')
+    #    sleep(30)
+
+
+
+@router.message(Command(commands='disable_auto'))
+async def set_off_auto_request(message: Message, bot: Bot):
+    user_id = get_user_id(message.from_user.id)
+    disable_auto(user_id)
+    await message.answer(text='Автоматический опрос новых вакансий выключен')
 
 
 @router.message(Command(commands='delmenu'))

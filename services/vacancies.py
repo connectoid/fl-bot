@@ -1,12 +1,14 @@
 import requests
+import re
 
 from rss_parser import Parser
 from fake_useragent import UserAgent
 
 from database.orm import (add_vacancy, get_new_vacancies,
                           set_vacancy_reviewed, add_vacancy_to_favorite,
+                          get_user_categories_list
                           )
-
+from lexicon.lexicon_ru import NO_ADDED_LINKS, NO_NEW_VACANCIES
 
 rss_url = 'https://www.fl.ru/rss/all.xml?subcategory=37&category=5p'
 
@@ -35,12 +37,37 @@ def get_vacancies(user_id, category):
         title = item.title
         description = item.description
         link = item.link
-        print('============ found vacancy:', title)
         add_vacancy(user_id, title, description, link)
 
 
 def update_vacancies(user_id, categories):
     for category in categories:
-        print('######### requesting fo category:', category)
         get_vacancies(user_id, category)
 
+
+def request_new_vacansies(user_id):
+    categories = get_user_categories_list(user_id)
+    new_vacancies_dict = {}
+    if categories:
+        update_vacancies(user_id, categories)
+        new_vacancies = get_new_vacancies()
+        if new_vacancies:
+            for new_vacancy in new_vacancies:
+                text = (f'Вакансия № {new_vacancy.id} \n'
+                        f'<b>{new_vacancy.title}</b> \n'
+                        f'<i>{new_vacancy.description}</i> \n'
+                        f'{new_vacancy.link}')
+                new_vacancies_dict[new_vacancy.id] = text
+            return new_vacancies_dict
+        else:
+            return NO_NEW_VACANCIES
+    else:
+        return NO_ADDED_LINKS
+
+
+def check_category_link(link: str) -> bool:
+    pattern = re.compile(r'https://www.fl.ru/rss/all.xml\?subcategory=[0-9]+&category=[0-9]+')
+    result = pattern.match(link)
+    if result:
+        return True
+    return False
