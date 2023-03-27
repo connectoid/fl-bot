@@ -24,8 +24,9 @@ scheduler = AsyncIOScheduler()
 @router.message(CommandStart())
 async def process_start_command(message: Message):
     add_user(message.from_user.id)
+    user_id = get_user_id(message.from_user.id)
     await message.answer(text='Вы запустили бот fl-bot')
-    if not check_categories(message.from_user.id):
+    if not check_categories(user_id):
         await message.answer(text=NO_ADDED_LINKS)
     scheduler.add_job(process_request_new_vacancies_silent, 'interval', seconds=REQUEST_INTERVAL, args=(message,))
     scheduler.start()

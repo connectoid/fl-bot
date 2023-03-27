@@ -106,7 +106,8 @@ def get_user_categories_list(user_id):
 
 def check_categories(user_id):
     session = Session()
-    if session.query(CategoryLink).filter(CategoryLink.owner == user_id).first():
+    category = session.query(CategoryLink).filter(CategoryLink.owner == user_id).first()
+    if category:
         return True
     return False
 
